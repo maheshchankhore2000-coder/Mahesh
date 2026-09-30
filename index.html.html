@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Singularity</title>
+<style>
+:root{--bg:#120c3a;--ink:#f6eaff;--hot:#ff4f8b;--amber:#ffc24a;--void:#7df9ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS",system-ui,sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+h1{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:16px;margin:0;font-size:1.5rem;pointer-events:none}
+#hint{position:fixed;top:calc(46px + env(safe-area-inset-top,0px));left:16px;margin:0;max-width:30ch;font-size:.9rem;opacity:.8;pointer-events:none}
+#hud{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:16px;text-align:right;font-size:1.05rem;font-weight:700;line-height:1.5;pointer-events:none}
+#hud b{color:var(--amber)}
+nav{position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:0 12px}
+button{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.08);border:2px solid var(--hot);border-radius:999px;padding:10px 18px;cursor:pointer}
+button:hover{background:var(--hot)}
+button.go{background:var(--amber);border-color:var(--amber);color:#2a1a00}
+button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+#end{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,86vw);text-align:center;background:rgba(18,12,58,.94);border:2px solid var(--amber);border-radius:22px;padding:22px}
+#end h2{margin:0 0 6px;font-size:1.6rem}
+#end p{margin:4px 0 14px}
+#end div{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<h1>Singularity</h1>
+<p id="hint">Move to steer the gravity well. Hold down to squeeze harder.</p>
+<div id="hud" hidden>Score <b id="s">0</b><br>Time <b id="t">45</b><br>Swarm <b id="n">0</b></div>
+<nav>
+<button id="play" class="go">Play</button>
+<button id="mode">Pulling</button>
+<button id="nova">Supernova</button>
+<button id="more">Add 500</button>
+<button id="reset">Reset</button>
+</nav>
+<div id="end" hidden role="dialog" aria-live="polite">
+<h2 id="eh">Time's up</h2>
+<p id="ep"></p>
+<div><button class="go" id="again">Play again</button><button id="sand">Sandbox</button></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),c=$('c'),x=c.getContext('2d');
+let W,H,D=Math.min(window.devicePixelRatio||1,2);
+function clear(){x.fillStyle='#120c3a';x.fillRect(0,0,W,H)}
+function fit(){W=innerWidth;H=innerHeight;c.width=W*D;c.height=H*D;x.setTransform(D,0,0,D,0,0);clear()}
+addEventListener('resize',fit);fit();
+let P=[],dir=1,down=false,mx=W/2,my=H/2,last=performance.now();
+let game=false,score=0,time=0,lvl=0,cool=0,ring={x:0,y:0,r:80,age:0},voids=[],best=0;
+try{best=+localStorage.getItem('sing-best')||0}catch(e){}
+function spawn(n){for(let i=0;i<n;i++){const a=Math.random()*6.283,r=60+Math.random()*Math.min(W,H)*.4,s=Math.sqrt(r)*.35;
+P.push({x:W/2+Math.cos(a)*r,y:H/2+Math.sin(a)*r,vx:-Math.sin(a)*s,vy:Math.cos(a)*s})}}
+spawn(1200);
+c.addEventListener('pointerdown',e=>{down=true;mx=e.clientX;my=e.clientY;c.setPointerCapture(e.pointerId)});
+c.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY});
+c.addEventListener('pointerup',()=>down=false);
+c.addEventListener('pointercancel',()=>down=false);
+function nova(){
+if(game&&cool>0)return;
+if(game)cool=5;
+for(const p of P){const dx=p.x-mx,dy=p.y-my,d=Math.hypot(dx,dy)+1,k=6+Math.random()*10;p.vx+=dx/d*k;p.vy+=dy/d*k}
+x.fillStyle='rgba(255,194,74,.5)';x.fillRect(0,0,W,H)}
+function newRing(){const m=Math.min(120,W/4,H/4);ring.x=m+Math.random()*(W-2*m);ring.y=m+Math.random()*(H-2*m);ring.r=Math.max(44,88-lvl*5);ring.age=0;lvl++}
+function addVoid(){const a=Math.random()*6.283;voids.push({x:Math.random()*W,y:Math.random()*H,vx:Math.cos(a)*55,vy:Math.sin(a)*55,r:52})}
+function setUI(on){
+$('hud').hidden=!on;$('more').hidden=on;$('reset').hidden=on;$('end').hidden=true;
+$('play').textContent=on?'Quit':'Play';
+$('hint').textContent=on?'Herd the swarm into the gold ring. Cyan voids eat it.':'Move to steer the gravity well. Hold down to squeeze harder.'}
+function start(){P=[];spawn(1200);lvl=0;score=0;time=45;cool=0;voids=[];newRing();game=true;clear();setUI(true)}
+function stop(){game=false;voids=[];P=[];spawn(1200);setUI(false);$('nova').textContent='Supernova';clear()}
+function over(){
+game=false;const sc=Math.floor(score),nb=sc>best;
+if(nb){best=sc;try{localStorage.setItem('sing-best',sc)}catch(e){}}
+$('eh').textContent=P.length<40?'The voids won':"Time's up";
+$('ep').textContent='Score '+sc+(nb?'. New best!':'. Best '+best+'.');
+$('end').hidden=false;$('hud').hidden=true;$('nova').textContent='Supernova'}
+$('play').onclick=()=>game?stop():start();
+$('again').onclick=start;
+$('sand').onclick=stop;
+$('mode').onclick=e=>{dir=-dir;e.target.textContent=dir>0?'Pulling':'Pushing'};
+$('nova').onclick=nova;
+$('more').onclick=()=>spawn(500);
+$('reset').onclick=()=>{P=[];spawn(1200);clear()};
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();nova()}});
+function tick(now){
+const dt=Math.min((now-last)/1000,.05);last=now;
+x.fillStyle='rgba(18,12,58,.16)';x.fillRect(0,0,W,H);
+if(game){
+time-=dt;cool=Math.max(0,cool-dt);ring.age+=dt;
+if(ring.age>6)newRing();
+const want=(time<35?1:0)+(time<20?1:0);
+while(voids.length<want)addVoid();
+for(const v of voids){v.x+=v.vx*dt;v.y+=v.vy*dt;
+if(v.x<v.r||v.x>W-v.r)v.vx*=-1;if(v.y<v.r||v.y>H-v.r)v.vy*=-1}
+const pulse=1+Math.sin(now/180)*.04,rr=ring.r*pulse;
+x.beginPath();x.arc(ring.x,ring.y,rr,0,6.283);
+x.fillStyle='rgba(255,194,74,.10)';x.fill();x.lineWidth=3;x.strokeStyle='#ffc24a';x.stroke();
+for(const v of voids){x.beginPath();x.arc(v.x,v.y,v.r,0,6.283);
+x.fillStyle='rgba(0,0,0,.65)';x.fill();x.lineWidth=3;x.strokeStyle='#7df9ff';x.setLineDash([8,6]);x.stroke();x.setLineDash([])}
+}
+const g=(down?110:32)*dir;let inRing=0,dead=false;
+for(const p of P){
+const dx=mx-p.x,dy=my-p.y,inv=g/(dx*dx+dy*dy+2000);
+p.vx=(p.vx+dx*inv)*.996;p.vy=(p.vy+dy*inv)*.996;
+const s=Math.hypot(p.vx,p.vy);
+if(s>16){p.vx*=16/s;p.vy*=16/s}
+p.x+=p.vx;p.y+=p.vy;
+if(p.x<0||p.x>W){p.vx*=-.8;p.x=Math.max(0,Math.min(W,p.x))}
+if(p.y<0||p.y>H){p.vy*=-.8;p.y=Math.max(0,Math.min(H,p.y))}
+if(game){
+if((p.x-ring.x)**2+(p.y-ring.y)**2<ring.r*ring.r)inRing++;
+for(const v of voids)if((p.x-v.x)**2+(p.y-v.y)**2<v.r*v.r){p.dead=true;dead=true;break}}
+x.fillStyle='hsl('+(320-Math.min(s,12)*22)+',100%,'+(55+Math.min(s,8)*3)+'%)';
+x.fillRect(p.x,p.y,2.2,2.2)}
+if(game){
+if(dead)P=P.filter(p=>!p.dead);
+score+=inRing*dt;
+$('s').textContent=Math.floor(score);$('t').textContent=Math.max(0,Math.ceil(time));$('n').textContent=P.length;
+$('nova').textContent=cool>0?'Supernova '+Math.ceil(cool)+'s':'Supernova';
+if(time<=0||P.length<40)over()}
+requestAnimationFrame(tick)}
+requestAnimationFrame(tick);
+</script></body></html>
